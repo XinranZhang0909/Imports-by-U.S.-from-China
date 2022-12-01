@@ -1,1 +1,1 @@
-# Imports-by-U.S.-from-China
+Fitted a seasonal ARIMA model with calendar trigonometric pairs to analyze trend and changes of US-to-China imports, presented dynamic seasonal structure, performed a residual analysis with the residual acf, pacf, and spectral density
