@@ -1,0 +1,163 @@
+---
+title: "Monthly imports by the U.S. from China"
+author: "Xinran Zhang"
+output: html_document
+---
+
+```{r}
+china<-read.csv("ChinaImports2.txt")
+attach(china)
+head(china)
+```
+```{r}
+fMonth<-as.factor(Month)
+china<-data.frame(china,fMonth)
+downturn<-c(rep(NA,147),Imports[148:155],rep(NA,73),Imports[229:246],rep(NA,19))
+plot(ts(Imports,start=c(1989,1),freq=12), ylab="Imports",main="Monthly imports by the U.S. from China, in Millions of dollars",col="green",lwd=2)
+lines(ts(downturn,start=c(1989,1),freq=12),col="red",lwd=2)
+legend("topleft",legend="Economic downturns",col="red",lty=1,cex=0.8)
+```
+```{r}
+logdownturn<-c(rep(NA,147),logImports[148:155],rep(NA,73),logImports[229:246],rep(NA,19))
+plot(ts(logImports,start=c(1989,1),freq=12), ylab="logImports",main="Log of monthly imports by the U.S. from China, in Millions of dollars",col="green",lwd=2)
+lines(ts(logdownturn,start=c(1989,1),freq=12),col="red",lwd=2)
+legend("topleft",legend="Economic downturns",col="red",lty=1,cex=0.8)
+```
+```{r}
+obs146<-c(rep(0,145),1,rep(0,226))
+obs242<-c(rep(0,241),1,rep(0,130))
+obs315<-c(rep(0,314),1,rep(0,57))
+model1<-lm(dlogImports~fMonth+obs146+obs242+obs315+c348+s348+c432+s432)
+summary(model1)
+```
+```{r}
+model2<-lm(dlogImports~fMonth+obs146+obs242+obs315+c348+s348)
+summary(model2)
+```
+```{r}
+anova(model2,model1)
+```
+```{r}
+b1<-coef(model1)[1]
+b2<-coef(model1)[2:12]+b1
+b3<-c(b1,b2)
+x<-b3-mean(b3)
+s12<-0
+for(j in 2:12){
+  xsub<-x[j:12]
+  s12<-s12+sum(xsub)
+  }
+s12<-s12/12
+s<-c(rep(0,times=12))
+s[12]<-s12
+for(j in 1:11){
+  xsub<-x[1:j]
+  s[j]<-s[12]+sum(xsub)
+  }
+s<-exp(s)
+s
+```
+```{r}
+plot(ts(s),xlab="Month",ylab="Seasonal Indices",main=" Estimated Seasonal Indices from Model 1")
+```
+```{r}
+plot(ts(resid(model1),start=c(1989,1),freq=12),ylab="Model 1 residuals", main="Model 1 Residuals")
+```
+```{r}
+qqnorm(resid(model1))
+qqline(resid(model1))
+```
+```{r}
+shapiro.test(resid(model1))
+```
+
+```{r}
+acf(resid(model1),36)
+```
+```{r}
+spectrum(resid(model1),span=8)
+abline(v=c(1/12,2/12,3/12,4/12,5/12,6/12),col="red",lty=2)
+abline(v=c(0.348,0.432),col="blue",lty=2)
+```
+```{r}
+library("hwwntest")
+bartlettB.test(ts(resid(model1)))
+```
+
+```{r}
+model3<-lm(logImports~c348+s348+c432+s432);summary(model3)
+```
+```{r}
+plot(ts(diff(resid(model3)),start=c(1989,1),freq=12),ylab="Difference of residuals", main="Difference of Residuals")
+```
+
+```{r}
+plot(ts(diff(diff(resid(model3))),start=c(1989,1),freq=12),ylab="Seasonal Difference of residuals", main="Seasonal Difference of Residuals")
+```
+
+```{r}
+df<-data.frame(obs146,obs242,obs315)
+arima1<-arima(resid(model3),order=c(11,1,0),seasonal=list(order=c(4,1,0),period=12),xreg=df)
+arima1
+```
+```{r}
+library("lmtest")
+coeftest(arima1)
+```
+```{r}
+sel<-c(1:12)
+arimaresid<-resid(arima1)
+arimapred<-resid(model3)[-sel]-arimaresid[-sel]
+darimapred<-diff(arimapred)
+sel2<-1:11
+darimapred<-darimapred[-sel2]
+y<-darimapred
+seasm<-matrix(rep(0,348),ncol=29)
+j<--11
+for(ii in 1:29){
+  j<-j+12;j2<-j+11
+  y[j:j2]<-exp(y[j:j2]-mean(y[j:j2]))
+  j1<-j+1
+  seasm[12,ii]<-1
+  for(i in j1:j2){
+    sub<-y[i:j2]
+    seasm[12,ii]<-seasm[12,ii]*prod(sub)
+  }
+  seasm[12,ii]<-(seasm[12,ii])^(1/12)
+  j3<-j+10
+  ir<-0
+  for(i in j:j3){
+  ir<-ir+1
+  sub<-y[j:i]
+  seasm[ir,ii]<-seasm[12,ii]*prod(sub)
+  }
+  }
+seasstatic<-apply(seasm,1,prod)^(1/29)
+seasstatic
+```
+```{r}
+plot(ts(seasstatic),xlab="Month",ylab="Seasonal Indices",main=" Estimated Seasonal Indices from ARIMA Model 1")
+```
+```{r}
+cbind(s,seasstatic)
+```
+```{r}
+plot(ts(s),xlab="Month",ylab="Seasonal Index",main="Comparison of Seasonal Index Estimates",ylim=c(0.75,1.3),col="green",lwd=2)
+lines(ts(seasstatic),col="red",lwd=2)
+legend("topleft",legend=c("regression","ARIMA"),col=c("green","red"),lty=1,cex=0.7)
+```
+```{r}
+year<-seq(1991,2019)
+seasstatic<-matrix(rep(seasstatic,29),ncol=29)
+name<-c("January","February","March","April","May","June","July","August","Se
+ptember","October","November","December")
+par(mfrow=c(3,1))
+for(i in 1:3){
+  plot(year,seasm[i,],xlab="Year",ylab="Indices",main=name[i],type="l",lwd=2,col="red")
+  lines(year,seasstatic[i,],lty=1,lwd=2,col="blue")
+}
+```
+```{r}
+plot(ts(resid(arima1)[-sel],start=c(1990,1),freq=12),ylab="ARIMA Model residuals", main="ARIMA Model Residuals")
+```
+
